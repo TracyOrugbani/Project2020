@@ -1,0 +1,74 @@
+#Load an R data frame.
+#first of all set working directory
+
+#install packages and load libraries
+
+#install.packages("plyr") #Tools for Splitting, Applying and Combining Data
+#install.packages("dplyr") #dplyr is a grammar of data manipulation,
+#install.packages('ggplot2')
+#install.packages('caret') #creating predictive model
+#install.packages('rattle')
+library(rattle)  #providing a graphical user interface
+library(magrittr) # For the %>% and %<>% operators.
+library(caret)
+library(lattice)
+library(ggplot2)
+library(dplyr)
+library(plyr)
+
+#Load CSV file
+Employee_Turnover <- read.csv("~/EmpTurnover.csv")
+MYdataset <- Employee_Turnover
+
+#data quality
+str(MYdataset)
+summary(MYdataset)
+head(MYdataset)
+sum(is.na(MYdataset)) #missing values
+
+#initial look
+StatusCount<- as.data.frame.matrix(MYdataset %>%
+                                     group_by(STATUS_YEAR) %>%
+                                     select(STATUS) %>%
+                                     table())
+StatusCount$TOTAL<-StatusCount$ACTIVE + StatusCount$TERMINATED
+StatusCount$PercentTerminated <-StatusCount$TERMINATED/(StatusCount$TOTAL)*100
+StatusCount
+mean(StatusCount$PercentTerminated)
+
+#plotting Business Unit to dertermine the ratio of Active to Terminated by status
+ggplot() + geom_bar(aes(y = ..count..,x =as.factor(BUSINESS_UNIT),
+                        fill = as.factor(STATUS)),
+                    data=MYdataset,position = position_stack())
+
+
+#just terminates
+TerminatesData<- as.data.frame(MYdataset %>%
+                                 filter(STATUS=="TERMINATED"))
+
+#status_year by termtype_desc
+ggplot() + geom_bar(aes(y = ..count..,x =as.factor(STATUS_YEAR),
+                        fill = as.factor(termtype_desc)),
+                    data=TerminatesData,position = position_stack())
+
+
+#status_year by termreason_desc
+ggplot() + geom_bar(aes(y = ..count..,x =as.factor(STATUS_YEAR),
+                        fill = as.factor(termreason_desc)),
+                    data=TerminatesData, position = position_stack())
+
+
+#department_name by termreason_desc
+ggplot() + geom_bar(aes(y = ..count..,x =as.factor(department_name),
+                        fill = as.factor(termreason_desc)),
+                    data=TerminatesData,position = position_stack())+
+  theme(axis.text.x=element_text(angle=90,hjust=1,vjust=0.5))
+
+
+
+#feature plot age and length of service
+featurePlot(x=MYdataset[,6:7],y=MYdataset$STATUS,plot="density",
+            auto.key = list(columns = 2))
+
+#box plot age and length
+featurePlot(x=MYdataset[,6:7],y=MYdataset$STATUS,plot="box",auto.key = list(columns = 2))
