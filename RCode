@@ -73,6 +73,56 @@ featurePlot(x=MYdataset[,6:7],y=MYdataset$STATUS,plot="density",
 #box plot age and length
 featurePlot(x=MYdataset[,6:7],y=MYdataset$STATUS,plot="box",auto.key = list(columns = 2))
 
+#######################################################################################################
+#parition data
+
+building <- TRUE
+scoring  <- ! building
+
+# A pre-defined value is used to reset the random seed so that results are repeatable.
+crv$seed <- 42 
+
+# Load an R data frame.
+Employee_Turnover <- read.csv("~/EmpTurnover.csv")
+MYdataset <- Employee_Turnover
+
+
+#Create training and testing datasets
+set.seed(crv$seed) 
+MYnobs <- nrow(MYdataset) # 49653 observations 
+MYnobs
+
+#picking out from year 2006 to 2014 to train our model nrow (44637)/ Splitting dataset
+MYsample <- MYtrain <- subset(MYdataset,STATUS_YEAR<=2014)
+
+MYvalidate <- NULL
+
+#test our model on 2015 data nrow(4906)
+MYtest <- subset(MYdataset,STATUS_YEAR== 2015)
+
+
+# The following variable selections have been noted / Feature Selection.
+MYinput <- c("age", "length_of_service",    "gender_full",
+               "STATUS_YEAR", "BUSINESS_UNIT")
+
+MYnumeric <- c("age", "length_of_service", "STATUS_YEAR")
+
+MYcategoric <- c("gender_full", "BUSINESS_UNIT")
+
+MYtarget  <- "STATUS"
+MYrisk    <- NULL
+MYident   <- "EmployeeID"
+MYignore  <- c("recorddate_key", "birthdate_key", "orighiredate_key", "terminationdate_key", 
+               "city_name", "gender_short", "termreason_desc", "termtype_desc","department_name",
+               "job_title", "store_name")
+MYweights <- NULL
+
+MYTrainingData<-MYtrain[c(MYinput, MYtarget)]
+MYTestingData<-MYtest[c(MYinput, MYtarget)]
+
+#checking the ratio of active to Terminated
+table(MYTrainingData$STATUS)
+
                     ## modelling ##
 
 # Classification Models
