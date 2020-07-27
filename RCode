@@ -227,29 +227,15 @@ MYksvm
 
 
 # Regression model
-# Build a Regression model.
+# Build a Logistic Regression model.
 
 MYglm <- glm(STATUS ~ .,
              data=MYtrain[c(MYinput, MYtarget)],
              family=binomial(link="logit"))
 
-# Generate a textual view of the Linear model.
-
+# Generate a textual view of the Logistic model.
 print(summary(MYglm))
-cat(sprintf("Log likelihood: %.3f (%d df)\n",
-            logLik(MYglm)[1],
-            attr(logLik(MYglm), "df")))
-cat(sprintf("Null/Residual deviance difference: %.3f (%d df)\n",
-            MYglm$null.deviance-MYglm$deviance,
-            MYglm$df.null-MYglm$df.residual))
-cat(sprintf("Chi-square p-value: %.8f\n",
-            dchisq(MYglm$null.deviance-MYglm$deviance,
-                   MYglm$df.null-MYglm$df.residual)))
-cat(sprintf("Pseudo R-Square (optimistic): %.8f\n",
-            cor(MYglm$y, MYglm$fitted.values)))
-cat('\n==== ANOVA ====\n\n')
-print(anova(MYglm, test="Chisq"))
-cat("\n")
+
 
 
 
