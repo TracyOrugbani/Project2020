@@ -1,32 +1,44 @@
-#Load an R data frame.
+
 #first of all set working directory
 
-#install packages and load libraries
+# install packages and load libraries
 
-#install.packages("plyr") #Tools for Splitting, Applying and Combining Data
-#install.packages("dplyr") #dplyr is a grammar of data manipulation,
-#install.packages('ggplot2')
-#install.packages('caret') #creating predictive model
-#install.packages('rattle')
+# install.packages("plyr") #Tools for Splitting, Applying and Combining Data
+# install.packages("dplyr") #dplyr is a grammar of data manipulation,
+# install.packages('ggplot2')
+# install.packages('ROSE')
+# install.packages('caret') #creating predictive model
+# install.packages('rattle')
+# install.packages('ROCR')
+
+# Load Libraries
+library(ROCR)
+library(ROSE)
 library(rattle)  #providing a graphical user interface
 library(magrittr) # For the %>% and %<>% operators.
 library(caret)
 library(lattice)
 library(ggplot2)
+library(gplots)
 library(dplyr)
 library(plyr)
 
-#Load CSV file
+# Load CSV file
 Employee_Turnover <- read.csv("~/EmpTurnover.csv")
 MYdataset <- Employee_Turnover
+MYdataset <- MYdataset[MYdataset$termreason_desc != "Not Applicable" , ]
+count(MYdataset$STATUS)
 
-#data quality
+# data quality
+head(MYdataset)
+View(MYdataset)
 str(MYdataset)
 summary(MYdataset)
-head(MYdataset)
 sum(is.na(MYdataset)) #missing values
+prop.table(table(MYdataset$STATUS))
 
-#initial look
+
+# initial look
 StatusCount<- as.data.frame.matrix(MYdataset %>%
                                      group_by(STATUS_YEAR) %>%
                                      select(STATUS) %>%
@@ -36,13 +48,13 @@ StatusCount$PercentTerminated <-StatusCount$TERMINATED/(StatusCount$TOTAL)*100
 StatusCount
 mean(StatusCount$PercentTerminated)
 
-#plotting Business Unit to dertermine the ratio of Active to Terminated by status
+# plotting Business Unit to dertermine the ratio of Active to Terminated by status
 ggplot() + geom_bar(aes(y = ..count..,x =as.factor(BUSINESS_UNIT),
                         fill = as.factor(STATUS)),
                     data=MYdataset,position = position_stack())
 
 
-#just terminates
+# just terminates
 TerminatesData<- as.data.frame(MYdataset %>%
                                  filter(STATUS=="TERMINATED"))
 
@@ -58,7 +70,7 @@ ggplot() + geom_bar(aes(y = ..count..,x =as.factor(STATUS_YEAR),
                     data=TerminatesData, position = position_stack())
 
 
-#department_name by termreason_desc
+# department_name by termreason_desc
 ggplot() + geom_bar(aes(y = ..count..,x =as.factor(department_name),
                         fill = as.factor(termreason_desc)),
                     data=TerminatesData,position = position_stack())+
@@ -66,67 +78,86 @@ ggplot() + geom_bar(aes(y = ..count..,x =as.factor(department_name),
 
 
 
-#feature plot age and length of service
-featurePlot(x=MYdataset[,6:7],y=MYdataset$STATUS,plot="density",
-            auto.key = list(columns = 2))
+# feature plot age and length of service
+#featurePlot(x=MYdataset[,6:7],y=MYdataset$STATUS,plot="density", auto.key = list(columns = 2))
 
-#box plot age and length
-featurePlot(x=MYdataset[,6:7],y=MYdataset$STATUS,plot="box",auto.key = list(columns = 2))
+# box plot age and length
+#featurePlot(x=MYdataset[,6:7],y=MYdataset$STATUS,plot="box",auto.key = list(columns = 2))
 
-#######################################################################################################
-#parition data
 
+########################################################################################
+# Balancing Dataset
+library(ROSE)
+MYdataset <- ovun.sample(STATUS ~ ., data = MYdataset, method = 'over', N = 12630) $ data
+count(MYdataset$STATUS)
+
+# partition data
 building <- TRUE
 scoring  <- ! building
+
 
 # A pre-defined value is used to reset the random seed so that results are repeatable.
 crv$seed <- 42 
 
 # Load an R data frame.
-Employee_Turnover <- read.csv("~/EmpTurnover.csv")
-MYdataset <- Employee_Turnover
+#Employee_Turnover <- read.csv("~/EmpTurnover.csv")
+#MYdataset <- Employee_Turnover
 
 
-#Create training and testing datasets
-set.seed(crv$seed) 
-MYnobs <- nrow(MYdataset) # 49653 observations 
-MYnobs
+# Create training and testing datasets
+set.seed(crv$seed)
+
+# Split dataset into 70 30 percentage
+indices <- sample(nrow(MYdataset), 0.70 * nrow(MYdataset))
+Train <- MYdataset[indices, ]
+Test <- MYdataset[ -indices, ]
+
 
 #picking out from year 2006 to 2014 to train our model nrow (44637)/ Splitting dataset
-MYsample <- MYtrain <- subset(MYdataset,STATUS_YEAR<=2014)
+#MYsample <- MYtrain <- subset(MYdataset,STATUS_YEAR<=2014)
 
-MYvalidate <- NULL
+#MYvalidate <- NULL
 
 #test our model on 2015 data nrow(4906)
-MYtest <- subset(MYdataset,STATUS_YEAR== 2015)
+#MYtest <- subset(MYdataset,STATUS_YEAR== 2015)
 
 
 # The following variable selections have been noted / Feature Selection.
 MYinput <- c("age", "length_of_service",    "gender_full",
-               "STATUS_YEAR", "BUSINESS_UNIT")
-
-MYnumeric <- c("age", "length_of_service", "STATUS_YEAR")
-
-MYcategoric <- c("gender_full", "BUSINESS_UNIT")
+               "STATUS_YEAR", "BUSINESS_UNIT", "job_title" )
 
 MYtarget  <- "STATUS"
-MYrisk    <- NULL
-MYident   <- "EmployeeID"
-MYignore  <- c("recorddate_key", "birthdate_key", "orighiredate_key", "terminationdate_key", 
-               "city_name", "gender_short", "termreason_desc", "termtype_desc","department_name",
-               "job_title", "store_name")
-MYweights <- NULL
 
-MYTrainingData<-MYtrain[c(MYinput, MYtarget)]
-MYTestingData<-MYtest[c(MYinput, MYtarget)]
+# MYnumeric <- c("age", "length_of_service", "STATUS_YEAR")
+# MYcategoric <- c("gender_full", "BUSINESS_UNIT")
+# MYweights <- NULL
+# MYrisk    <- NULL
+# MYident   <- "EmployeeID"
+MYignore  <- c("recorddate_key", "birthdate_key", "orighiredate_key", "terminationdate_key", 
+               "city_name", "gender_short","department_name", "termreason_desc", "termtype_desc",
+               "store_name")
+
+
+MYTrainingData<-Train[c(MYinput, MYtarget)]
+MYTestingData<-Test[c(MYinput, MYtarget)]
 
 #checking the ratio of active to Terminated
 table(MYTrainingData$STATUS)
+table(MYTestingData$STATUS)
 
-                    ## modelling ##
 
-# Classification Models
-# Decision Tree 
+#=====================================================================================#
+# Introduction: When it comes to evaluating models for predicting categories, we are 
+# defining accuracy as to how many times did the model predict the actual. So we are interested 
+# in a number of things.The first of these are error matrices. In error matrices, you are 
+# cross-tabulating the actual results with predicted results. If the prediction was a ‘perfect’ 100%, 
+# every prediction would be the same as actual. 
+# This almost never happens. The higher the correct prediction rate and lower the error rate, the better.
+#======================================================================================#
+############################### Classification Models #################################
+
+################################ Decision Tree #######################################
+
 # The 'rpart' package provides the 'rpart' function.
 library(rattle)
 library(rpart, quietly=TRUE)
@@ -142,25 +173,53 @@ MYrpart <- rpart(STATUS ~ .,
                  control=rpart.control(usesurrogate=0, 
                                        maxsurrogate=0))
 
-# Generate a textual view of the Decision Tree model.
-print(MYrpart)
-
-MYpr <- predict(MYrpart, newdata=MYtest[c(MYinput, MYtarget)], type="class")
-count(data.frame(MYpr))
+MYrpart
 
 
-# Plot the resulting Decision Tree. 
+# Plot the resulting Decision Tree.
 # We use the rpart.plot package.
-
-fancyRpartPlot(MYrpart, main="Decision Tree MFG10YearTerminationData $ STATUS")
-
-#install.packages("rpart.plot")
+# install.packages("rpart.plot")
 library(rpart.plot)
 rpart.plot(MYrpart, extra = 4)
 
 
+########################### Evaluate model performance by confusion Matrix ###############################
 
-# Random Forest
+# Generate an Error Matrix for the Decision Tree model.
+# Obtain the response from the Decision Tree model.
+
+MYpr <- predict(MYrpart, newdata=MYTestingData, type="class")
+MYpr
+
+# Generate the confusion matrix showing counts.
+table(MYTestingData$STATUS, MYpr,
+      dnn=c("Actual", "Predicted"))
+
+# Generate the confusion matrix showing proportions.
+pcme <- function(actual, cl)
+{
+  x <- table(actual, cl)
+  nc <- nrow(x)
+  tbl <- cbind(x/length(actual),
+               Error=sapply(1:nc,
+                            function(r) round(sum(x[r,-r])/sum(x[r,]), 2)))
+  names(attr(tbl, "dimnames")) <- c("Actual", "Predicted")
+  return(tbl)
+}
+per <- pcme(MYTestingData$STATUS, MYpr)
+round(per, 2)
+
+# Calculate the overall error percentage.
+cat(100*round(1-sum(diag(per), na.rm=TRUE), 2))
+
+# Calculate the averaged class error percentage.
+cat(100*round(mean(per[,"Error"], na.rm=TRUE), 2))
+
+
+#=======================================================================
+
+################################ Random Forest ###########################
+
 # The 'randomForest' package provides the 'randomForest' function.
 
 #install.packages("randomForest")
@@ -168,73 +227,731 @@ library(randomForest, quietly=TRUE)
 
 # Build the Random Forest model.
 set.seed(crv$seed)
-MYrf <- randomForest::randomForest(STATUS ~ .,
-                                   data=MYtrain[c(MYinput, MYtarget)],
+MYrf <- randomForest(as.factor(STATUS) ~ .,
+                                   data=MYTrainingData,
                                    ntree=500,
                                    mtry=2,
                                    importance=TRUE,
-                                   na.action=randomForest::na.roughfix,
+                                   #na.action=randomForest::na.roughfix,
                                    replace=FALSE)
 
-# Generate textual output of 'Random Forest' model.
 MYrf
 
+plot
 
-# Ada Boost 
+library(pROC)
+
+# The `pROC' package implements various AUC functions.
+# Calculate the Area Under the Curve (AUC).
+pROC::roc(MYrf$y, as.numeric(MYrf$predicted))
+
+# Calculate the AUC Confidence Interval.
+pROC::ci.auc(MYrf$y, as.numeric(MYrf$predicted))
+
+# List the importance of the variables.
+rn <- round(randomForest::importance(MYrf), 2)
+rn[order(rn[,3], decreasing=TRUE),]
+
+############################### Evaluate Model Performance by confusion Matrix ##############################
+
+# Generate an Error Matrix for the Random Forest model.
+# Obtain the response from the Random Forest model.
+MYpr <- predict(MYrf, newdata=na.omit(MYTestingData))
+
+# Generate the confusion matrix showing counts.
+table(na.omit(MYTestingData)$STATUS, MYpr,
+      dnn=c("Actual", "Predicted"))
+
+# Generate the confusion matrix showing proportions.
+pcme <- function(actual, cl)
+{
+  x <- table(actual, cl)
+  nc <- nrow(x)
+  tbl <- cbind(x/length(actual),
+               Error=sapply(1:nc,
+                            function(r) round(sum(x[r,-r])/sum(x[r,]), 2)))
+  names(attr(tbl, "dimnames")) <- c("Actual", "Predicted")
+  return(tbl)
+}
+per <- pcme(na.omit(MYTestingData)$STATUS, MYpr)
+round(per, 2)
+
+# Calculate the overall error percentage.
+cat(100*round(1-sum(diag(per), na.rm=TRUE), 2))
+
+# Calculate the averaged class error percentage.
+cat(100*round(mean(per[,"Error"], na.rm=TRUE), 2))
+
+
+
+#==================================================================================#
+
+############################# Ada Boost ###########################################
+
 # The `ada' package implements the boost algorithm.
 # Build the Ada Boost model.
-
 set.seed(crv$seed)
-install.packages("ada")
+#install.packages("ada")
 library(ada)
 
-MYada <- ada::ada(STATUS ~ .,
-                  data=MYtrain[c(MYinput, MYtarget)],
+MYada <- ada(STATUS ~ .,
+                  data=MYTrainingData,
                   control=rpart::rpart.control(maxdepth=30,
                                                cp=0.010000,
                                                minsplit=20,
                                                xval=10),
                   iter=50)
 
-# Print the results of the modelling.
-print(MYada)
+
+MYada
 round(MYada$model$errs[MYada$iter,], 2)
 cat('Variables actually used in tree construction:\n')
 
-install.packages('listAdaVarsUsed')
-library(listAdaVarsUsed)
+########################## Evaluate Model Performance by confusion Matrix #################
 
-print(sort(names(listAdaVarsUsed(MYada))))
-cat('\nFrequency of variables actually used:\n')
-print(listAdaVarsUsed(MYada))
+# Generate an Error Matrix for the Ada Boost model.
+# Obtain the response from the Ada Boost model.
 
-# Support vector machine. 
+MYpr <- predict(MYada, newdata=MYTestingData)
+
+# Generate the confusion matrix showing counts.
+table(MYTestingData$STATUS, MYpr,
+      dnn=c("Actual", "Predicted"))
+
+# Generate the confusion matrix showing proportions.
+pcme <- function(actual, cl)
+{
+  x <- table(actual, cl)
+  nc <- nrow(x)
+  tbl <- cbind(x/length(actual),
+               Error=sapply(1:nc,
+                            function(r) round(sum(x[r,-r])/sum(x[r,]), 2)))
+  names(attr(tbl, "dimnames")) <- c("Actual", "Predicted")
+  return(tbl)
+}
+per <- pcme(MYTestingData$STATUS, MYpr)
+round(per, 2)
+
+# Calculate the overall error percentage.
+cat(100*round(1-sum(diag(per), na.rm=TRUE), 2))
+
+# Calculate the averaged class error percentage.
+cat(100*round(mean(per[,"Error"], na.rm=TRUE), 2))
+
+
+
+#==============================================================================
+
+########################## Support vector machine. #############################
 
 # The 'kernlab' package provides the 'ksvm' function.
-install.packages("kernlab")
+# install.packages("kernlab")
 library(kernlab, quietly=TRUE)
 
 # Build a Support Vector Machine model.
-
 set.seed(crv$seed)
 MYksvm <- ksvm(as.factor(STATUS) ~ .,
-               data=MYtrain[c(MYinput, MYtarget)],
+               data=MYTrainingData,
                kernel="rbfdot",
                prob.model=TRUE)
 
-# Generate a textual view of the SVM model.
 MYksvm
 
+################ Model Evaluation by confusion Matrix ################
 
-# Regression model
-# Build a Logistic Regression model.
+# Generate an Error Matrix for the SVM model.
+# Obtain the response from the SVM model.
+MYpr <- kernlab::predict(MYksvm, newdata=na.omit(MYTestingData))
 
-MYglm <- glm(STATUS ~ .,
-             data=MYtrain[c(MYinput, MYtarget)],
-             family=binomial(link="logit"))
+# Generate the confusion matrix showing counts.
+table(na.omit(MYTestingData)$STATUS, MYpr,
+      dnn=c("Actual", "Predicted"))
 
-# Generate a textual view of the Logistic model.
+# Generate the confusion matrix showing proportions.
+pcme <- function(actual, cl)
+{
+  x <- table(actual, cl)
+  nc <- nrow(x)
+  tbl <- cbind(x/length(actual),
+               Error=sapply(1:nc,
+                            function(r) round(sum(x[r,-r])/sum(x[r,]), 2)))
+  names(attr(tbl, "dimnames")) <- c("Actual", "Predicted")
+  return(tbl)
+}
+per <- pcme(na.omit(MYTestingData)$STATUS, MYpr)
+round(per, 2)
+
+# Calculate the overall error percentage.
+cat(100*round(1-sum(diag(per), na.rm=TRUE), 2))
+
+# Calculate the averaged class error percentage.
+cat(100*round(mean(per[,"Error"], na.rm=TRUE), 2))
+
+
+
+#===============================================================================#
+
+############################# Regression model ##################################
+
+# Build a Regression model.
+MYglm <- glm(as.factor(STATUS) ~ .,
+             data=MYTrainingData,
+             family=binomial)
+
+# Generate a textual view of the Linear model.
 print(summary(MYglm))
+cat(sprintf("Log likelihood: %.3f (%d df)\n",
+            logLik(MYglm)[1],
+            attr(logLik(MYglm), "df")))
+cat(sprintf("Null/Residual deviance difference: %.3f (%d df)\n",
+            MYglm$null.deviance-MYglm$deviance,
+            MYglm$df.null-MYglm$df.residual))
+cat(sprintf("Chi-square p-value: %.8f\n",
+            dchisq(MYglm$null.deviance-MYglm$deviance,
+                   MYglm$df.null-MYglm$df.residual)))
+cat(sprintf("Pseudo R-Square (optimistic): %.8f\n",
+            cor(MYglm$y, MYglm$fitted.values)))
+cat('\n==== ANOVA ====\n\n')
+print(anova(MYglm, test="Chisq"))
+cat("\n")
+
+
+################################ Model Evaluation By cunfusion Matrix ###################################
+
+# Generate an Error Matrix for the Linear model.
+# Obtain the response from the Linear model.
+MYpr <- as.vector(ifelse(predict(MYglm, type="response", newdata=MYTestingData) > 0.5, "TERMINATED", "ACTIVE"))
+
+# Generate the confusion matrix showing counts.
+table(MYTestingData$STATUS, MYpr,
+      dnn=c("Actual", "Predicted"))
+
+# Generate the confusion matrix showing proportions.
+pcme <- function(actual, cl)
+{
+  x <- table(actual, cl)
+  nc <- nrow(x)
+  tbl <- cbind(x/length(actual),
+               Error=sapply(1:nc,
+                            function(r) round(sum(x[r,-r])/sum(x[r,]), 2)))
+  names(attr(tbl, "dimnames")) <- c("Actual", "Predicted")
+  return(tbl)
+}
+per <- pcme(MYTestingData$STATUS, MYpr_LR)
+round(per, 2)
+
+# Calculate the overall error percentage.
+cat(100*round(1-sum(diag(per), na.rm=TRUE), 2))
+
+# Calculate the averaged class error percentage.
+cat(100*round(mean(per[,"Error"], na.rm=TRUE), 2))
+
+
+
+#=========================================================================================#
+# Conclusion : Summarizing the confusion matrix showed that decision trees, random forests, 
+# and Adaboost all did well predicted similarly. BUT Support Vector Machines and the Linear 
+# Models did worse for this data.
+#==========================================================================================#
+
+
+
+#===========================================================================================#
+# Another way to evaluate the models is the AUC. The higher the AUC the better. 
+# The code below generates the information necessary to produce the graphs.
+#============================================================================================#
+
+########################## Evaluate model performance by ROC/AUC curve. ##########################
+
+# ROC Curve: requires the ROCR package.
+#install.packages('pROC')
+library(pROC)
+
+# ROC Curve: requires the ggplot2 package.
+library(ggplot2, quietly=TRUE)
+
+# Generate an ROC Curve for the rpart model on MYdataset [test].
+MYpr <- predict(MYrpart, newdata=MYTestingData)[,2]
+
+# Remove observations with missing target.
+no.miss   <- na.omit(MYTestingData$STATUS)
+miss.list <- attr(no.miss, "na.action")
+attributes(no.miss) <- NULL
+
+if (length(miss.list))
+{
+  pred <- prediction(MYpr[-miss.list], no.miss)
+} else
+{
+  pred <- prediction(MYpr, no.miss)
+}
+
+pe <- performance(pred, "tpr", "fpr")
+au <- performance(pred, "auc")@y.values[[1]]
+pd <- data.frame(fpr=unlist(pe@x.values), tpr=unlist(pe@y.values))
+p <- ggplot(pd, aes(x=fpr, y=tpr))
+p <- p + geom_line(colour="red")
+p <- p + xlab("False Positive Rate") + ylab("True Positive Rate")
+p <- p + ggtitle("ROC Curve Decision Tree MYdataset [test] STATUS")
+p <- p + theme(plot.title=element_text(size=10))
+p <- p + geom_line(data=data.frame(), aes(x=c(0,1), y=c(0,1)), colour="grey")
+p <- p + annotate("text", x=0.50, y=0.00, hjust=0, vjust=0, size=5,
+                  label=paste("AUC =", round(au, 2)))
+print(p)
+
+# Calculate the area under the curve for the plot.
+# Remove observations with missing target.
+
+no.miss   <- na.omit(MYTestingData$STATUS)
+miss.list <- attr(no.miss, "na.action")
+attributes(no.miss) <- NULL
+
+if (length(miss.list))
+{
+  pred <- prediction(MYpr[-miss.list], no.miss)
+} else
+{
+  pred <- prediction(MYpr, no.miss)
+}
+performance(pred, "auc")
+
+#=============================================================================
+
+# Generate an ROC Curve for the ada model on MYdataset [test].
+MYpr <- predict(MYada, newdata=MYTestingData, type="prob")[,2]
+
+# Remove observations with missing target.
+no.miss   <- na.omit(MYTestingData$STATUS)
+miss.list <- attr(no.miss, "na.action")
+attributes(no.miss) <- NULL
+
+if (length(miss.list))
+{
+  pred <- prediction(MYpr[-miss.list], no.miss)
+} else
+{
+  pred <- prediction(MYpr, no.miss)
+}
+
+pe <- performance(pred, "tpr", "fpr")
+au <- performance(pred, "auc")@y.values[[1]]
+pd <- data.frame(fpr=unlist(pe@x.values), tpr=unlist(pe@y.values))
+p <- ggplot(pd, aes(x=fpr, y=tpr))
+p <- p + geom_line(colour="red")
+p <- p + xlab("False Positive Rate") + ylab("True Positive Rate")
+p <- p + ggtitle("ROC Curve Ada Boost MYdataset [test] STATUS")
+p <- p + theme(plot.title=element_text(size=10))
+p <- p + geom_line(data=data.frame(), aes(x=c(0,1), y=c(0,1)), colour="grey")
+p <- p + annotate("text", x=0.50, y=0.00, hjust=0, vjust=0, size=5,
+                  label=paste("AUC =", round(au, 2)))
+print(p)
+
+# Calculate the area under the curve for the plot.
+# Remove observations with missing target.
+no.miss   <- na.omit(MYTestingData$STATUS)
+miss.list <- attr(no.miss, "na.action")
+attributes(no.miss) <- NULL
+
+if (length(miss.list))
+{
+  pred <- prediction(MYpr[-miss.list], no.miss)
+} else
+{
+  pred <- prediction(MYpr, no.miss)
+}
+performance(pred, "auc")
+
+#=============================================================================================================#
+
+# Generate an ROC Curve for the rf model on MYdataset [test].
+MYpr <- predict(MYrf, newdata=na.omit(MYTestingData), type="prob")[,2]
+
+# Remove observations with missing target.
+no.miss   <- na.omit(na.omit(MYTestingData)$STATUS)
+miss.list <- attr(no.miss, "na.action")
+attributes(no.miss) <- NULL
+
+if (length(miss.list))
+{
+  pred <- prediction(MYpr[-miss.list], no.miss)
+} else
+{
+  pred <- prediction(MYpr, no.miss)
+}
+
+pe <- performance(pred, "tpr", "fpr")
+au <- performance(pred, "auc")@y.values[[1]]
+pd <- data.frame(fpr=unlist(pe@x.values), tpr=unlist(pe@y.values))
+p <- ggplot(pd, aes(x=fpr, y=tpr))
+p <- p + geom_line(colour="red")
+p <- p + xlab("False Positive Rate") + ylab("True Positive Rate")
+p <- p + ggtitle("ROC Curve Random Forest MYdataset [test] STATUS")
+p <- p + theme(plot.title=element_text(size=10))
+p <- p + geom_line(data=data.frame(), aes(x=c(0,1), y=c(0,1)), colour="grey")
+p <- p + annotate("text", x=0.50, y=0.00, hjust=0, vjust=0, size=5,
+                  label=paste("AUC =", round(au, 2)))
+print(p)
+
+# Calculate the area under the curve for the plot.
+# Remove observations with missing target.
+no.miss   <- na.omit(na.omit(MYTestingData)$STATUS)
+miss.list <- attr(no.miss, "na.action")
+attributes(no.miss) <- NULL
+
+if (length(miss.list))
+{
+  pred <- prediction(MYpr[-miss.list], no.miss)
+} else
+{
+  pred <- prediction(MYpr, no.miss)
+}
+performance(pred, "auc")
+
+
+#===================================================================================================#
+
+# Generate an ROC Curve for the ksvm model on MYdataset [test].
+MYpr <- kernlab::predict(MYksvm, newdata=na.omit(MYTestingData), type="probabilities")[,2]
+
+# Remove observations with missing target.
+no.miss   <- na.omit(na.omit(MYTestingData)$STATUS)
+miss.list <- attr(no.miss, "na.action")
+attributes(no.miss) <- NULL
+
+if (length(miss.list))
+{
+  pred <- prediction(MYpr[-miss.list], no.miss)
+} else
+{
+  pred <- prediction(MYpr, no.miss)
+}
+
+pe <- performance(pred, "tpr", "fpr")
+au <- performance(pred, "auc")@y.values[[1]]
+pd <- data.frame(fpr=unlist(pe@x.values), tpr=unlist(pe@y.values))
+p <- ggplot(pd, aes(x=fpr, y=tpr))
+p <- p + geom_line(colour="red")
+p <- p + xlab("False Positive Rate") + ylab("True Positive Rate")
+p <- p + ggtitle("ROC Curve SVM MYdataset [test] STATUS")
+p <- p + theme(plot.title=element_text(size=10))
+p <- p + geom_line(data=data.frame(), aes(x=c(0,1), y=c(0,1)), colour="grey")
+p <- p + annotate("text", x=0.50, y=0.00, hjust=0, vjust=0, size=5,
+                  label=paste("AUC =", round(au, 2)))
+print(p)
+
+# Calculate the area under the curve for the plot.
+# Remove observations with missing target.
+no.miss   <- na.omit(na.omit(MYTestingData)$STATUS)
+miss.list <- attr(no.miss, "na.action")
+attributes(no.miss) <- NULL
+
+if (length(miss.list))
+{
+  pred <- prediction(MYpr[-miss.list], no.miss)
+} else
+{
+  pred <- prediction(MYpr, no.miss)
+}
+performance(pred, "auc")
+
+
+#==================================================================================#
+
+# Generate an ROC Curve for the glm model on MFG10YearTerminationData [test].
+MYpr <- predict(MYglm, type="response", newdata=MYTestingData)
+
+# Remove observations with missing target.
+no.miss   <- na.omit(MYTestingData$STATUS)
+miss.list <- attr(no.miss, "na.action")
+attributes(no.miss) <- NULL
+
+if (length(miss.list))
+{
+  pred <- prediction(MYpr[-miss.list], no.miss)
+} else
+{
+  pred <- prediction(MYpr, no.miss)
+}
+
+pe <- performance(pred, "tpr", "fpr")
+au <- performance(pred, "auc")@y.values[[1]]
+pd <- data.frame(fpr=unlist(pe@x.values), tpr=unlist(pe@y.values))
+p <- ggplot(pd, aes(x=fpr, y=tpr))
+p <- p + geom_line(colour="red")
+p <- p + xlab("False Positive Rate") + ylab("True Positive Rate")
+p <- p + ggtitle("ROC Curve Logistic Mydataset [test] STATUS")
+p <- p + theme(plot.title=element_text(size=10))
+p <- p + geom_line(data=data.frame(), aes(x=c(0,1), y=c(0,1)), colour="grey")
+p <- p + annotate("text", x=0.50, y=0.00, hjust=0, vjust=0, size=5,
+                  label=paste("AUC =", round(au, 2)))
+print(p)
+
+
+# Calculate the area under the curve for the plot.
+# Remove observations with missing target.
+no.miss   <- na.omit(MYTestingData$STATUS)
+miss.list <- attr(no.miss, "na.action")
+attributes(no.miss) <- NULL
+
+if (length(miss.list))
+{
+  pred <- prediction(MYpr[-miss.list], no.miss)
+} else
+{
+  pred <- prediction(MYpr, no.miss)
+}
+performance(pred, "auc")
+
+
+#========================================================================#
+
+####################### Evaluate model performance by Precision/ Recall ###################### 
+
+# Generate a Precision/Recall Plot for the rpart model on MYdataset [test].
+MYpr <- predict(MYrpart, newdata=MYTestingData)[,2]
+
+# Remove observations with missing target.
+no.miss   <- na.omit(MYTestingData$STATUS)
+miss.list <- attr(no.miss, "na.action")
+attributes(no.miss) <- NULL
+
+if (length(miss.list))
+{
+  pred <- prediction(MYpr[-miss.list], no.miss)
+} else
+{
+  pred <- prediction(MYpr, no.miss)
+}
+ROCR::plot(performance(pred, "prec", "rec"), col="#CC0000FF", lty=1, add=FALSE)
+
+#============================================================================================
+
+# Generate a Precision/Recall Plot for the ada model on MYdataset [test].
+MYpr <- predict(MYada, newdata=MYTestingData, type="prob")[,2]
+
+# Remove observations with missing target.
+no.miss   <- na.omit(MYTestingData$STATUS)
+miss.list <- attr(no.miss, "na.action")
+attributes(no.miss) <- NULL
+
+if (length(miss.list))
+{
+  pred <- prediction(MYpr[-miss.list], no.miss)
+} else
+{
+  pred <- prediction(MYpr, no.miss)
+}
+ROCR::plot(performance(pred, "prec", "rec"), col="#A3CC00FF", lty=2, add=TRUE)
+
+#=============================================================================================
+
+# Generate a Precision/Recall Plot for the rf model on MYdataset [test].
+MYpr <- predict(MYrf, newdata=na.omit(MYTestingData), type="prob")[,2]
+
+# Remove observations with missing target.
+no.miss   <- na.omit(na.omit(MYTestingData)$STATUS)
+miss.list <- attr(no.miss, "na.action")
+attributes(no.miss) <- NULL
+
+if (length(miss.list))
+{
+  pred <- prediction(MYpr[-miss.list], no.miss)
+} else
+{
+  pred <- prediction(MYpr, no.miss)
+}
+ROCR::plot(performance(pred, "prec", "rec"), col="#00CC52FF", lty=3, add=TRUE)
+
+#==================================================================================================
+
+# Generate a Precision/Recall Plot for the ksvm model on MFG10YearTerminationData [test].
+MYpr <- kernlab::predict(MYksvm, newdata=na.omit(MYTestingData), type="probabilities")[,2]
+
+# Remove observations with missing target.
+no.miss   <- na.omit(na.omit(MYTestingData)$STATUS)
+miss.list <- attr(no.miss, "na.action")
+attributes(no.miss) <- NULL
+
+if (length(miss.list))
+{
+  pred <- prediction(MYpr[-miss.list], no.miss)
+} else
+{
+  pred <- prediction(MYpr, no.miss)
+}
+ROCR::plot(performance(pred, "prec", "rec"), col="#0052CCFF", lty=4, add=TRUE)
+
+
+#=======================================================================================
+
+# Generate a Precision/Recall Plot for the glm model on MFG10YearTerminationData [test].
+MYpr <- predict(MYglm, type="response", newdata=MYTestingData)
+
+# Remove observations with missing target.
+no.miss   <- na.omit(MYTestingData)
+miss.list <- attr(no.miss, "na.action")
+attributes(no.miss) <- NULL
+
+
+if (length(miss.list))
+{
+  pred <- prediction(MYpr[-miss.list], no.miss)
+} else
+{
+  pred <- prediction(MYpr, no.miss)
+}
+ROCR::plot(performance(pred, "prec", "rec"), col="#A300CCFF", lty=5, add=TRUE)
+
+
+# Add a legend to the plot.
+legend("bottomleft", c("rpart","ada","rf","ksvm","glm"), col=rainbow(5, 1, .8), lty=1:5, title="Models", inset=c(1, 1))
+
+# Add decorations to the plot.
+
+title(main="Precision/Recall Plot  MFG10YearTerminationData [test]",
+      sub=paste("Rattle", format(Sys.time(), "%Y-%b-%d %H:%M:%S"), Sys.info()["user"]))
+grid()
+
+#============================================================
+
+######################### Evaluate model performance By sensitivity/ specificity ##############################
+
+# Sensitivity/Specificity Plot: requires the ROCR package
+
+# Generate Sensitivity/Specificity Plot for rpart model on MYdataset [test].
+MYpr <- predict(MYrpart, newdata=MYTestingData)[,2]
+
+# Remove observations with missing target.
+no.miss   <- na.omit(MYTestingData$STATUS)
+miss.list <- attr(no.miss, "na.action")
+attributes(no.miss) <- NULL
+
+if (length(miss.list))
+{
+  pred <- prediction(MYpr[-miss.list], no.miss)
+} else
+{
+  pred <- prediction(MYpr, no.miss)
+}
+ROCR::plot(performance(pred, "sens", "spec"), col="#CC0000FF", lty=1, add=FALSE)
+
+#================================================================================================
+
+# Generate Sensitivity/Specificity Plot for ada model on MYdataset [test].
+MYpr <- predict(MYada, newdata=MYTestingData, type="prob")[,2]
+
+# Remove observations with missing target.
+no.miss   <- na.omit(MYTestingData$STATUS)
+miss.list <- attr(no.miss, "na.action")
+attributes(no.miss) <- NULL
+
+if (length(miss.list))
+{
+  pred <- prediction(MYpr[-miss.list], no.miss)
+} else
+{
+  pred <- prediction(MYpr, no.miss)
+}
+ROCR::plot(performance(pred, "sens", "spec"), col="#A3CC00FF", lty=2, add=TRUE)
+
+#==============================================================================================
+
+# Generate Sensitivity/Specificity Plot for rf model on MFG10YearTerminationData [test].
+MYpr <- predict(MYrf, newdata=na.omit(MYTestingData), type="prob")[,2]
+
+# Remove observations with missing target.
+no.miss   <- na.omit(na.omit(MYTestingData)$STATUS)
+miss.list <- attr(no.miss, "na.action")
+attributes(no.miss) <- NULL
+
+if (length(miss.list))
+{
+  pred <- prediction(MYpr[-miss.list], no.miss)
+} else
+{
+  pred <- prediction(MYpr, no.miss)
+}
+ROCR::plot(performance(pred, "sens", "spec"), col="#00CC52FF", lty=3, add=TRUE)
+
+#===================================================================================================
+
+# Generate Sensitivity/Specificity Plot for ksvm model on MYdataset [test].
+MYpr <- kernlab::predict(MYksvm, newdata=na.omit(MYTestingData), type="probabilities")[,2]
+
+# Remove observations with missing target.
+no.miss   <- na.omit(na.omit(MYTestingData)$STATUS)
+miss.list <- attr(no.miss, "na.action")
+attributes(no.miss) <- NULL
+
+if (length(miss.list))
+{
+  pred <- prediction(MYpr[-miss.list], no.miss)
+} else
+{
+  pred <- prediction(MYpr, no.miss)
+}
+ROCR::plot(performance(pred, "sens", "spec"), col="#0052CCFF", lty=4, add=TRUE)
+
+#============================================================================================
+
+# Generate Sensitivity/Specificity Plot for glm model on MYdataset [test].
+MYpr <- predict(MYglm, type="response", newdata=MYTestingData)
+
+# Remove observations with missing target.
+no.miss   <- na.omit(MYTestingData$STATUS)
+miss.list <- attr(no.miss, "na.action")
+attributes(no.miss) <- NULL
+
+if (length(miss.list))
+{
+  pred <- prediction(MYpr[-miss.list], no.miss)
+} else
+{
+  pred <- prediction(MYpr, no.miss)
+}
+ROCR::plot(performance(pred, "sens", "spec"), col="#A300CCFF", lty=5, add=TRUE)
+
+
+# Add a legend to the plot.
+legend("bottomleft", c("rpart","ada","rf","ksvm","glm"), col=rainbow(5, 1, .8), lty=1:5, title="Models") #inset=c(0.05, 0.05))
+
+# Add decorations to the plot.
+title(main="Sensitivity/Specificity (tpr/tnr)  MFG10YearTerminationData [test]",
+      sub=paste("Rattle", format(Sys.time(), "%Y-%b-%d %H:%M:%S"), Sys.info()["user"]))
+grid()
+
+
+#======================================================================================#
+# It turns out that Random Forest produces the highest AUC. So we will use it to predict 
+# the 2016 terminates in just a little bit.The Logistic model was worst.
+
+# Deploy Model
+# Let’s predict  2016 Terminates.
+
+#
+# For purposes of this project we alter the data to make both
+# age year of service information – 1 year greater for 2016.
+
+#=======================================================================================#
+
+#Apply model
+#Generate 2016 data
+Employees2016 <- MYTestingData 
+
+ActiveEmployees2016<-subset(Employees2016,STATUS=='ACTIVE')
+ActiveEmployees2016$age<-ActiveEmployees2016$age+1
+ActiveEmployees2016$length_of_service<-ActiveEmployees2016$length_of_service+1
+
+#Predict 2016 Terminates using random Forest
+ActiveEmployees2016$PredictedSTATUS2016<-predict(MYrf,ActiveEmployees2016)
+ActiveEmployees2016$PredictedSTATUS2016 <- Employees2016
+count(ActiveEmployees2016$PredictedSTATUS2016)
+
+PredictedTerminatedEmployees2016<-subset(ActiveEmployees2016,PredictedSTATUS2016=='TERMINATED')
+
+# Count how much people will terminate their jobs in 2016
+count(PredictedTerminatedEmployees2016$PredictedSTATUS2016)
+
 
 
 
