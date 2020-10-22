@@ -1,5 +1,8 @@
 
 
+# DISSERTATION
+# PREDICTING EMPLOYEE TURNOVER
+
 # First of all set working directory
 
 # install packages and load libraries
@@ -27,7 +30,8 @@ library(plyr)
 # Load CSV file
 Employee_Turnover <- read.csv("~/EmpTurnover.csv")
 MYdataset <- Employee_Turnover
-MYdataset <- MYdataset[MYdataset$termreason_desc != "Not Applicable" , ]
+
+
 
 # data quality
 head(MYdataset)
@@ -106,13 +110,13 @@ MYinput <- c("age", "length_of_service", "gender_full", "BUSINESS_UNIT",
 MYtarget  <- "STATUS"
 
 MYTrainingData<-Train[c(MYinput, MYtarget)]
-count(MYTestingData$STATUS)<-Test[c(MYinput, MYtarget)]
+MYTestingData<-Test[c(MYinput, MYtarget)]
 
 
 # Balancing Training Dataset
 library(ROSE)
 MYTrainingData <- ovun.sample(STATUS ~ ., data = MYTrainingData, 
-                              method = 'over', N = 8854) $ data
+                              method = 'over', N = 67444) $ data
 
 count(MYTrainingData$STATUS)
 
@@ -125,7 +129,7 @@ table(MYTestingData$STATUS)
 # Introduction: When it comes to evaluating models for predicting categories, we are 
 # defining accuracy as to how many times did the model predict the actual. So we are interested 
 # in a number of things.The first of these are error matrices. In error matrices, you are 
-# cross-tabulating the actual results with predicted results. If the prediction was a ‘perfect’ 100%, 
+# cross-tabulating the actual results with predicted results. If the prediction was a 'perfect' 100%, 
 # every prediction would be the same as actual. 
 # This almost never happens. The higher the correct prediction rate and lower the error rate, the better.
 #======================================================================================#
@@ -165,10 +169,12 @@ summary(MYpr)
 
 # Generate the confusion matrix showing counts.
 cm_DT <- table(MYTestingData$STATUS, MYpr,
-      dnn=c("Actual", "Predicted"))
+               dnn=c("Actual", "Predicted"))
+cm_DT
 
 # Accuracy
 cm_DT$Accuracy <- mean (MYpr == MYTestingData$STATUS)
+cm_DT$Accuracy
 
 
 # Generate the confusion matrix showing proportions.
@@ -188,11 +194,6 @@ round(per, 2)
 # Calculate the overall error percentage.
 cat(100*round(1-sum(diag(per), na.rm=TRUE), 2))
 
-# Calculate the averaged class error percentage.
-#cat(100*round(mean(per[,"Error"], na.rm=TRUE), 2))
-
-
-
 #=======================================================================
 
 ################################ Random Forest ###########################
@@ -205,13 +206,13 @@ library(randomForest, quietly=TRUE)
 # Build the Random Forest model.
 set.seed(crv$seed)
 MYrf <- randomForest(as.factor(STATUS) ~ .,
-                                   data=MYTrainingData,
-                                   ntree=500,
+                     data=MYTrainingData,
+                     ntree=500,
                      type = "class",
-                                   mtry=2,
-                                   importance=TRUE,
-                                   #na.action=randomForest::na.roughfix,
-                                   replace=FALSE)
+                     mtry=2,
+                     importance=TRUE,
+                     #na.action=randomForest::na.roughfix,
+                     replace=FALSE)
 MYrf
 
 ############################### Evaluate Model Performance by confusion Matrix ##############################
@@ -223,10 +224,11 @@ summary(MYpr)
 
 # Generate the confusion matrix showing counts.
 cm_RF <- table(na.omit(MYTestingData)$STATUS, MYpr,
-      dnn=c("Actual", "Predicted"))
+               dnn=c("Actual", "Predicted"))
+cm_RF
 
 cm_RF$Accuracy <- mean (MYpr == MYTestingData$STATUS)
-
+cm_RF$Accuracy
 
 # Generate the confusion matrix showing proportions.
 pcme <- function(actual, cl)
@@ -245,11 +247,6 @@ round(per, 2)
 # Calculate the overall error percentage.
 cat(100*round(1-sum(diag(per), na.rm=TRUE), 2))
 
-# Calculate the averaged class error percentage.
-#cat(100*round(mean(per[,"Error"], na.rm=TRUE), 2))
-
-
-
 #==================================================================================#
 
 ############################# Ada Boost ###########################################
@@ -261,12 +258,12 @@ set.seed(crv$seed)
 library(ada)
 
 MYada <- ada(STATUS ~ .,
-                  data=MYTrainingData,
-                  control=rpart::rpart.control(maxdepth=30,
-                                               cp=0.010000,
-                                               minsplit=20,
-                                               xval=10),
-                  iter=50)
+             data=MYTrainingData,
+             control=rpart::rpart.control(maxdepth=30,
+                                          cp=0.010000,
+                                          minsplit=20,
+                                          xval=10),
+             iter=50)
 
 
 MYada
@@ -282,9 +279,11 @@ summary(MYpr)
 
 # Generate the confusion matrix showing counts.
 cm_Ada <- table(MYTestingData$STATUS, MYpr,
-      dnn=c("Actual", "Predicted"))
+                dnn=c("Actual", "Predicted"))
+cm_Ada
 
 cm_Ada$Accuracy <- mean (MYpr == MYTestingData$STATUS)
+cm_Ada$Accuracy
 
 
 # Generate the confusion matrix showing proportions.
@@ -303,10 +302,6 @@ round(per, 2)
 
 # Calculate the overall error percentage.
 cat(100*round(1-sum(diag(per), na.rm=TRUE), 2))
-
-# Calculate the averaged class error percentage.
-#cat(100*round(mean(per[,"Error"], na.rm=TRUE), 2))
-
 
 #==============================================================================
 
@@ -333,9 +328,11 @@ MYpr <- kernlab::predict(MYksvm, newdata=na.omit(MYTestingData))
 
 # Generate the confusion matrix showing counts.
 cm_SVM <- table(na.omit(MYTestingData)$STATUS, MYpr,
-      dnn=c("Actual", "Predicted"))
+                dnn=c("Actual", "Predicted"))
+cm_SVM
 
 cm_SVM$Accuracy <- mean (MYpr == MYTestingData$STATUS)
+cm_SVM$Accuracy
 
 # Generate the confusion matrix showing proportions.
 pcme <- function(actual, cl)
@@ -370,7 +367,7 @@ MYglm <- glm(as.factor(STATUS) ~ .,
 
 MYglm
 
-################################ Model Evaluation By cunfusion Matrix ###################################
+################################ Model Evaluation By confusion Matrix ###################################
 
 # Generate an Error Matrix for the Logistic model.
 # Obtain the response from the Logistic model.
@@ -378,9 +375,11 @@ MYpr <- as.vector(ifelse(predict(MYglm, type="response", newdata=MYTestingData) 
 
 # Generate the confusion matrix showing counts.
 cm_LR <- table(MYTestingData$STATUS, MYpr,
-      dnn=c("Actual", "Predicted"))
+               dnn=c("Actual", "Predicted"))
+cm_LR
 
 cm_LR$Accuracy <- mean (MYpr == MYTestingData$STATUS)
+cm_LR$Accuracy
 
 # Generate the confusion matrix showing proportions.
 pcme <- function(actual, cl)
@@ -679,222 +678,6 @@ if (length(miss.list))
 performance(pred, "auc")
 
 
-#========================================================================#
-
-####################### Evaluate model performance by Precision/ Recall ###################### 
-
-# Generate a Precision/Recall Plot for the rpart model on MYdataset [test].
-MYpr <- predict(MYrpart, newdata=MYTestingData)[,2]
-
-# Remove observations with missing target.
-no.miss   <- na.omit(MYTestingData$STATUS)
-miss.list <- attr(no.miss, "na.action")
-attributes(no.miss) <- NULL
-
-if (length(miss.list))
-{
-  pred <- prediction(MYpr[-miss.list], no.miss)
-} else
-{
-  pred <- prediction(MYpr, no.miss)
-}
-ROCR::plot(performance(pred, "prec", "rec"), col="#CC0000FF", lty=1, add=FALSE)
-
-#============================================================================================
-
-# Generate a Precision/Recall Plot for the ada model on MYdataset [test].
-MYpr <- predict(MYada, newdata=MYTestingData, type="prob")[,2]
-
-# Remove observations with missing target.
-no.miss   <- na.omit(MYTestingData$STATUS)
-miss.list <- attr(no.miss, "na.action")
-attributes(no.miss) <- NULL
-
-if (length(miss.list))
-{
-  pred <- prediction(MYpr[-miss.list], no.miss)
-} else
-{
-  pred <- prediction(MYpr, no.miss)
-}
-ROCR::plot(performance(pred, "prec", "rec"), col="#A3CC00FF", lty=2, add=TRUE)
-
-#=============================================================================================
-
-# Generate a Precision/Recall Plot for the rf model on MYdataset [test].
-MYpr <- predict(MYrf, newdata=na.omit(MYTestingData), type="prob")[,2]
-
-# Remove observations with missing target.
-no.miss   <- na.omit(na.omit(MYTestingData)$STATUS)
-miss.list <- attr(no.miss, "na.action")
-attributes(no.miss) <- NULL
-
-if (length(miss.list))
-{
-  pred <- prediction(MYpr[-miss.list], no.miss)
-} else
-{
-  pred <- prediction(MYpr, no.miss)
-}
-ROCR::plot(performance(pred, "prec", "rec"), col="#00CC52FF", lty=3, add=TRUE)
-
-#==================================================================================================
-
-# Generate a Precision/Recall Plot for the ksvm model on MFG10YearTerminationData [test].
-MYpr <- kernlab::predict(MYksvm, newdata=na.omit(MYTestingData), type="probabilities")[,2]
-
-# Remove observations with missing target.
-no.miss   <- na.omit(na.omit(MYTestingData)$STATUS)
-miss.list <- attr(no.miss, "na.action")
-attributes(no.miss) <- NULL
-
-if (length(miss.list))
-{
-  pred <- prediction(MYpr[-miss.list], no.miss)
-} else
-{
-  pred <- prediction(MYpr, no.miss)
-}
-ROCR::plot(performance(pred, "prec", "rec"), col="#0052CCFF", lty=4, add=TRUE)
-
-
-#=======================================================================================
-
-# Generate a Precision/Recall Plot for the glm model on MFG10YearTerminationData [test].
-MYpr <- predict(MYglm, type="response", newdata=MYTestingData)
-
-# Remove observations with missing target.
-no.miss   <- na.omit(MYTestingData)
-miss.list <- attr(no.miss, "na.action")
-attributes(no.miss) <- NULL
-
-
-if (length(miss.list))
-{
-  pred <- prediction(MYpr[-miss.list], no.miss)
-} else
-{
-  pred <- prediction(MYpr, no.miss)
-}
-ROCR::plot(performance(pred, "prec", "rec"), col="#A300CCFF", lty=5, add=TRUE)
-
-
-# Add a legend to the plot.
-legend("bottomleft", c("rpart","ada","rf","ksvm","glm"), col=rainbow(5, 1, .8), lty=1:5, title="Models", inset=c(0.4, 0.6))
-
-# Add decorations to the plot.
-
-title(main="Precision/Recall Plot  MFG10YearTerminationData [test]",
-      sub=paste("Rattle", format(Sys.time(), "%Y-%b-%d %H:%M:%S"), Sys.info()["user"]))
-grid()
-
-#============================================================
-
-######################### Evaluate model performance By sensitivity/ specificity ##############################
-
-# Sensitivity/Specificity Plot: requires the ROCR package
-
-# Generate Sensitivity/Specificity Plot for rpart model on MYdataset [test].
-MYpr <- predict(MYrpart, newdata=MYTestingData)[,2]
-
-# Remove observations with missing target.
-no.miss   <- na.omit(MYTestingData$STATUS)
-miss.list <- attr(no.miss, "na.action")
-attributes(no.miss) <- NULL
-
-if (length(miss.list))
-{
-  pred <- prediction(MYpr[-miss.list], no.miss)
-} else
-{
-  pred <- prediction(MYpr, no.miss)
-}
-ROCR::plot(performance(pred, "sens", "spec"), col="#CC0000FF", lty=1, add=FALSE)
-
-#================================================================================================
-
-# Generate Sensitivity/Specificity Plot for ada model on MYdataset [test].
-MYpr <- predict(MYada, newdata=MYTestingData, type="prob")[,2]
-
-# Remove observations with missing target.
-no.miss   <- na.omit(MYTestingData$STATUS)
-miss.list <- attr(no.miss, "na.action")
-attributes(no.miss) <- NULL
-
-if (length(miss.list))
-{
-  pred <- prediction(MYpr[-miss.list], no.miss)
-} else
-{
-  pred <- prediction(MYpr, no.miss)
-}
-ROCR::plot(performance(pred, "sens", "spec"), col="#A3CC00FF", lty=2, add=TRUE)
-
-#==============================================================================================
-
-# Generate Sensitivity/Specificity Plot for rf model on MFG10YearTerminationData [test].
-MYpr <- predict(MYrf, newdata=na.omit(MYTestingData), type="prob")[,2]
-
-# Remove observations with missing target.
-no.miss   <- na.omit(na.omit(MYTestingData)$STATUS)
-miss.list <- attr(no.miss, "na.action")
-attributes(no.miss) <- NULL
-
-if (length(miss.list))
-{
-  pred <- prediction(MYpr[-miss.list], no.miss)
-} else
-{
-  pred <- prediction(MYpr, no.miss)
-}
-ROCR::plot(performance(pred, "sens", "spec"), col="#00CC52FF", lty=3, add=TRUE)
-
-#===================================================================================================
-
-# Generate Sensitivity/Specificity Plot for ksvm model on MYdataset [test].
-MYpr <- kernlab::predict(MYksvm, newdata=na.omit(MYTestingData), type="probabilities")[,2]
-
-# Remove observations with missing target.
-no.miss   <- na.omit(na.omit(MYTestingData)$STATUS)
-miss.list <- attr(no.miss, "na.action")
-attributes(no.miss) <- NULL
-
-if (length(miss.list))
-{
-  pred <- prediction(MYpr[-miss.list], no.miss)
-} else
-{
-  pred <- prediction(MYpr, no.miss)
-}
-ROCR::plot(performance(pred, "sens", "spec"), col="#0052CCFF", lty=4, add=TRUE)
-
-#============================================================================================
-
-# Generate Sensitivity/Specificity Plot for glm model on MYdataset [test].
-MYpr <- predict(MYglm, type="response", newdata=MYTestingData)
-
-# Remove observations with missing target.
-no.miss   <- na.omit(MYTestingData$STATUS)
-miss.list <- attr(no.miss, "na.action")
-attributes(no.miss) <- NULL
-
-if (length(miss.list))
-{
-  pred <- prediction(MYpr[-miss.list], no.miss)
-} else
-{
-  pred <- prediction(MYpr, no.miss)
-}
-ROCR::plot(performance(pred, "sens", "spec"), col="#A300CCFF", lty=5, add=TRUE)
-
-
-# Add a legend to the plot.
-legend("bottomleft", c("rpart","ada","rf","ksvm","glm"), col=rainbow(5, 1, .8), lty=1:5, title="Models") #inset=c(0.05, 0.05))
-
-# Add decorations to the plot.
-title(main="Sensitivity/Specificity",
-      sub=paste("Rattle", format(Sys.time(), "%Y-%b-%d %H:%M:%S"), Sys.info()["user"]))
-grid()
 
 
 #======================================================================================#
@@ -906,8 +689,12 @@ grid()
 ###############################################################################################
 ############################## Predicting Yearly Turnover #####################################
 
-# Building 2013, 2014, 2015 Model
-# Deriving 2013, 2014, 2015 dataset from MYdataset
+# Building 2012, 2013, 2014, 2015 Model
+# Deriving 2012, 2013, 2014, 2015 dataset from MYdataset
+
+MYTrainingData_2012 <- subset(MYTrainingData, STATUS_YEAR ==2012)
+MYTestingData_2012 <- subset(MYTestingData, STATUS_YEAR==2012)
+
 MYTrainingData_2013 <- subset(MYTrainingData, STATUS_YEAR ==2013)
 MYTestingData_2013 <- subset(MYTestingData, STATUS_YEAR==2013)
 
@@ -919,74 +706,99 @@ MYTestingData_2015 <- subset(MYTestingData, STATUS_YEAR==2015)
 
 # Modelling individual Years and making Predictions
 
-# 2013
-MYada <- ada(STATUS ~ .,
-             data=MYTrainingData_2013,
-             control=rpart::rpart.control(maxdepth=30,
-                                          cp=0.010000,
-                                          minsplit=20,
-                                          xval=10),
-             iter=50)
+# 2012
+MYrf <- randomForest(as.factor(STATUS) ~ .,
+                     data=MYTrainingData_2012,
+                     ntree=500,
+                     type = "class",
+                     mtry=2,
+                     importance=TRUE,
+                     #na.action=randomForest::na.roughfix,
+                     replace=FALSE)
 
 
 # Making Predictions
-MYTestingData_2013$MYpr <- predict(MYada, newdata=MYTestingData_2013, type="vector")
+MYTestingData_2012$MYpr <- predict(MYrf, newdata=MYTestingData_2012, type="class")
+view(MYTestingData_2012)
+
+
+MY_2012 <- table(MYTestingData_2012$STATUS, MYTestingData_2012$MYpr,
+                 dnn=c("Actual", "Predicted"))
+MY_2012
+
+# 2013
+MYrf <- randomForest(as.factor(STATUS) ~ .,
+                     data=MYTrainingData_2013,
+                     ntree=500,
+                     type = "class",
+                     mtry=2,
+                     importance=TRUE,
+                     #na.action=randomForest::na.roughfix,
+                     replace=FALSE)
+
+
+# Making Predictions
+MYTestingData_2013$MYpr <- predict(MYrf, newdata=MYTestingData_2013, type="class")
 view(MYTestingData_2013)
 
 
 MY_2013 <- table(MYTestingData_2013$STATUS, MYTestingData_2013$MYpr,
-      dnn=c("Actual", "Predicted"))
+                 dnn=c("Actual", "Predicted"))
+MY_2013
 
 # 2014 Data
-MYada <- ada(STATUS ~ .,
-             data=MYTrainingData_2014,
-             control=rpart::rpart.control(maxdepth=30,
-                                          cp=0.010000,
-                                          minsplit=20,
-                                          xval=10),
-             iter=50)
+MYrf <- randomForest(as.factor(STATUS) ~ .,
+                     data=MYTrainingData_2014,
+                     ntree=500,
+                     type = "class",
+                     mtry=2,
+                     importance=TRUE,
+                     #na.action=randomForest::na.roughfix,
+                     replace=FALSE)
 
 
 # Making Predictions
-MYTestingData_2014$MYpr <- predict(MYada, newdata=MYTestingData_2014, type="vector")
+MYTestingData_2014$MYpr <- predict(MYrf, newdata=MYTestingData_2014, type="class")
 view(MYTestingData_2014)
 
 
 MY_2014 <- table(MYTestingData_2014$STATUS, MYTestingData_2014$MYpr,
-      dnn=c("Actual", "Predicted"))
+                 dnn=c("Actual", "Predicted"))
 
 # 2015 Data
-MYada <- ada(STATUS ~ .,
-             data=MYTrainingData_2015,
-             control=rpart::rpart.control(maxdepth=30,
-                                          cp=0.010000,
-                                          minsplit=20,
-                                          xval=10),
-             iter=50)
+MYrf <- randomForest(as.factor(STATUS) ~ .,
+                     data=MYTrainingData_2015,
+                     ntree=500,
+                     type = "class",
+                     mtry=2,
+                     importance=TRUE,
+                     #na.action=randomForest::na.roughfix,
+                     replace=FALSE)
 
 
 # Making Predictions
-MYTestingData_2015$MYpr <- predict(MYada, newdata=MYTestingData_2015, type="vector")
+MYTestingData_2015$MYpr <- predict(MYrf, newdata=MYTestingData_2015, type="class")
 view(MYTestingData_2015)
 
 MY_2015 <- table(MYTestingData_2015$STATUS, MYTestingData_2015$MYpr,
-      dnn=c("Actual", "Predicted"))
+                 dnn=c("Actual", "Predicted"))
 
 
 # Take 2014 Data and make predictions on 2015 data and compare with the original
-MYada <- ada(STATUS ~ .,
-             data=MYTrainingData_2014,
-             control=rpart::rpart.control(maxdepth=30,
-                                          cp=0.010000,
-                                          minsplit=20,
-                                          xval=10),
-             iter=50)
+MYrf <- randomForest(as.factor(STATUS) ~ .,
+                     data=MYTrainingData_2014,
+                     ntree=500,
+                     type = "class",
+                     mtry=2,
+                     importance=TRUE,
+                     #na.action=randomForest::na.roughfix,
+                     replace=FALSE)
 
-MYTestingData_2015$MYpr <- predict(MYada, newdata=MYTestingData_2015, type="vector")
+MYTestingData_2015$MYpr <- predict(MYrf, newdata=MYTestingData_2015, type="class")
 view(MYTestingData_2015)
 
 MY_2014_on_2015 <-table(MYTestingData_2015$STATUS, MYTestingData_2015$MYpr,
-      dnn=c("Actual", "Predicted"))
+                        dnn=c("Actual", "Predicted"))
 
 # Comparing 2014 Predictions and 2015
 MY_2013
