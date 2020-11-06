@@ -1,0 +1,857 @@
+# DISSERTATION
+# PREDICTING EMPLOYEE TURNOVER
+
+# First of all set working directory
+
+# install packages and load libraries
+
+# install.packages("plyr") #Tools for Splitting, Applying and Combining Data
+# install.packages("dplyr") #dplyr is a grammar of data manipulation,
+# install.packages('ggplot2')
+# install.packages('ROSE')
+# install.packages('caret') #creating predictive model
+# install.packages('rattle')
+# install.packages('ROCR')
+
+# Load Libraries
+library(ROCR)
+library(ROSE)
+library(rattle)  #providing a graphical user interface
+library(magrittr) # For the %>% and %<>% operators.
+library(caret)
+library(lattice)
+library(ggplot2)
+library(gplots)
+library(dplyr)
+library(plyr)
+
+# Load CSV file
+Employee_Turnover <- read.csv("~/EmpTurnover.csv")
+MYdataset <- Employee_Turnover
+View(MYdataset)
+
+
+
+# data quality
+head(MYdataset)
+view(MYdataset)
+str(MYdataset)
+summary(MYdataset)
+sum(is.na(MYdataset)) #missing values
+prop.table(table(MYdataset$STATUS))
+
+
+# initial look
+StatusCount<- as.data.frame.matrix(MYdataset %>%
+                                     group_by(STATUS_YEAR) %>%
+                                     select(STATUS) %>%
+                                     table())
+StatusCount$TOTAL<-StatusCount$ACTIVE + StatusCount$TERMINATED
+StatusCount$PercentTerminated <-StatusCount$TERMINATED/(StatusCount$TOTAL)*100
+StatusCount
+mean(StatusCount$PercentTerminated)
+
+# plotting Business Unit to dertermine the ratio of Active to Terminated by status
+ggplot() + geom_bar(aes(y = ..count..,x =as.factor(BUSINESS_UNIT),
+                        fill = as.factor(STATUS)),
+                    data=MYdataset,position = position_stack())
+
+
+# just terminates
+TerminatesData<- as.data.frame(MYdataset %>%
+                                 filter(STATUS=="TERMINATED"))
+
+#status_year by termtype_desc
+ggplot() + geom_bar(aes(y = ..count..,x =as.factor(STATUS_YEAR),
+                        fill = as.factor(termtype_desc)),
+                    data=TerminatesData,position = position_stack())
+
+
+#status_year by termreason_desc
+ggplot() + geom_bar(aes(y = ..count..,x =as.factor(STATUS_YEAR),
+                        fill = as.factor(termreason_desc)),
+                    data=TerminatesData, position = position_stack())
+
+
+# department_name by termreason_desc
+ggplot() + geom_bar(aes(y = ..count..,x =as.factor(department_name),
+                        fill = as.factor(termreason_desc)),
+                    data=TerminatesData,position = position_stack())+
+  theme(axis.text.x=element_text(angle=90,hjust=1,vjust=0.5))
+
+
+
+feature plot age and length of service
+featurePlot(x=MYdataset[,6:7],y=MYdataset$STATUS,plot="density", auto.key = list(columns = 2))
+
+# box plot age and length
+#featurePlot(x=MYdataset[,6:7],y=MYdataset$STATUS,plot="box",auto.key = list(columns = 2))
+
+
+########################################################################################
+# partition data
+# building <- TRUE
+# scoring  <- ! building
+
+# A pre-defined value is used to reset the random seed so that results are repeatable.
+crv$seed <- 42
+set.seed(crv$seed)
+
+# Create training and testing datasets Split dataset into 70 30 percentage
+indices <- sample(nrow(MYdataset), 0.70 * nrow(MYdataset))
+Train <- MYdataset[indices, ]
+Test <- MYdataset[ -indices, ]
+
+# The following variable selections have been noted / Feature Selection.
+MYinput <- c("age", "length_of_service", "gender_full", "BUSINESS_UNIT")
+
+MYinput2 <- c("age", "length_of_service", "gender_full", "BUSINESS_UNIT", "STATUS_YEAR")
+
+
+
+MYtarget  <- "STATUS"
+
+MYTrainingData<-Train[c(MYinput, MYtarget)]
+View(MYTrainingData)
+
+MYTestingData<-Test[c(MYinput2, MYtarget)]
+View(MYTestingData)
+
+
+# Balancing Training Dataset
+library(ROSE)
+MYTrainingData <- ovun.sample(STATUS ~ ., data = MYTrainingData, 
+                              method = 'over', N = 67444) $ data
+
+count(MYTrainingData$STATUS)
+
+#checking the ratio of Active to Terminated
+table(MYTrainingData$STATUS)
+table(MYTestingData$STATUS)
+
+
+#=====================================================================================#
+# Introduction: When it comes to evaluating models for predicting categories, we are 
+# defining accuracy as to how many times did the model predict the actual. So we are interested 
+# in a number of things.The first of these are error matrices. In error matrices, you are 
+# cross-tabulating the actual results with predicted results. If the prediction was a 'perfect' 100%, 
+# every prediction would be the same as actual. 
+# This almost never happens. The higher the correct prediction rate and lower the error rate, the better.
+#======================================================================================#
+############################### Classification Models #################################
+
+################################ Decision Tree #######################################
+
+# The 'rpart' package provides the 'rpart' function.
+library(rattle)
+library(rpart, quietly=TRUE)
+# Build the Decision Tree model.
+MYrpart <- rpart(STATUS ~ .,
+                 data=MYTrainingData,
+                 method="class",
+                 parms=list(split="information"),
+                 control=rpart.control(usesurrogate=0, 
+                                       maxsurrogate=0))
+
+MYrpart
+
+
+# Plot the resulting Decision Tree.
+# We use the rpart.plot package.
+# install.packages("rpart.plot")
+library(rpart.plot)
+rpart.plot(MYrpart)
+
+
+########################### Evaluate model performance by confusion Matrix ###############################
+
+# Generate an Error Matrix for the Decision Tree model.
+# Obtain the response from the Decision Tree model.
+
+# Making Prediction
+MYpr <- predict(MYrpart, newdata=MYTestingData, type="class")
+summary(MYpr)
+
+# Generate the confusion matrix showing counts.
+cm_DT <- table(MYTestingData$STATUS, MYpr,
+               dnn=c("Actual", "Predicted"))
+cm_DT
+
+# Accuracy
+cm_DT$Accuracy <- mean (MYpr == MYTestingData$STATUS)
+cm_DT$Accuracy
+
+
+# Generate the confusion matrix showing proportions.
+pcme <- function(actual, cl)
+{
+  x <- table(actual, cl)
+  nc <- nrow(x)
+  tbl <- cbind(x/length(actual),
+               Error=sapply(1:nc,
+                            function(r) round(sum(x[r,-r])/sum(x[r,]), 2)))
+  names(attr(tbl, "dimnames")) <- c("Actual", "Predicted")
+  return(tbl)
+}
+per <- pcme(MYTestingData$STATUS, MYpr)
+round(per, 2)
+
+# Calculate the overall error percentage.
+cat(100*round(1-sum(diag(per), na.rm=TRUE), 2))
+
+#=======================================================================
+
+################################ Random Forest ###########################
+
+# The 'randomForest' package provides the 'randomForest' function.
+
+# install.packages("randomForest")
+library(randomForest, quietly=TRUE)
+
+# Build the Random Forest model.
+set.seed(crv$seed)
+MYrf <- randomForest(as.factor(STATUS) ~ .,
+                     data=MYTrainingData,
+                     ntree=500,
+                     type = "class",
+                     mtry=2,
+                     importance=TRUE,
+                     #na.action=randomForest::na.roughfix,
+                     replace=FALSE)
+MYrf
+
+############################### Evaluate Model Performance by confusion Matrix ##############################
+
+# Generate an Error Matrix for the Random Forest model.
+# Obtain the response from the Random Forest model.
+MYpr <- predict(MYrf, newdata=na.omit(MYTestingData), type = "class")
+summary(MYpr)
+
+# Generate the confusion matrix showing counts.
+cm_RF <- table(na.omit(MYTestingData)$STATUS, MYpr,
+               dnn=c("Actual", "Predicted"))
+cm_RF
+
+cm_RF$Accuracy <- mean (MYpr == MYTestingData$STATUS)
+cm_RF$Accuracy
+
+# Generate the confusion matrix showing proportions.
+pcme <- function(actual, cl)
+{
+  x <- table(actual, cl)
+  nc <- nrow(x)
+  tbl <- cbind(x/length(actual),
+               Error=sapply(1:nc,
+                            function(r) round(sum(x[r,-r])/sum(x[r,]), 2)))
+  names(attr(tbl, "dimnames")) <- c("Actual", "Predicted")
+  return(tbl)
+}
+per <- pcme(na.omit(MYTestingData)$STATUS, MYpr)
+round(per, 2)
+
+# Calculate the overall error percentage.
+cat(100*round(1-sum(diag(per), na.rm=TRUE), 2))
+
+#==================================================================================#
+
+############################# Ada Boost ###########################################
+
+# The `ada' package implements the boost algorithm.
+# Build the Ada Boost model.
+set.seed(crv$seed)
+#install.packages("ada")
+library(ada)
+
+MYada <- ada(STATUS ~ .,
+             data=MYTrainingData,
+             control=rpart::rpart.control(maxdepth=30,
+                                          cp=0.010000,
+                                          minsplit=20,
+                                          xval=10),
+             iter=50)
+
+
+MYada
+
+
+########################## Evaluate Model Performance by confusion Matrix #################
+
+# Generate an Error Matrix for the Ada Boost model.
+# Obtain the response from the Ada Boost model.
+
+MYpr <- predict(MYada, newdata=MYTestingData, type = "vector")
+summary(MYpr)
+
+# Generate the confusion matrix showing counts.
+cm_Ada <- table(MYTestingData$STATUS, MYpr,
+                dnn=c("Actual", "Predicted"))
+cm_Ada
+
+cm_Ada$Accuracy <- mean (MYpr == MYTestingData$STATUS)
+cm_Ada$Accuracy
+
+
+# Generate the confusion matrix showing proportions.
+pcme <- function(actual, cl)
+{
+  x <- table(actual, cl)
+  nc <- nrow(x)
+  tbl <- cbind(x/length(actual),
+               Error=sapply(1:nc,
+                            function(r) round(sum(x[r,-r])/sum(x[r,]), 2)))
+  names(attr(tbl, "dimnames")) <- c("Actual", "Predicted")
+  return(tbl)
+}
+per <- pcme(MYTestingData$STATUS, MYpr)
+round(per, 2)
+
+# Calculate the overall error percentage.
+cat(100*round(1-sum(diag(per), na.rm=TRUE), 2))
+
+#==============================================================================
+
+########################## Support vector machine. #############################
+
+# The 'kernlab' package provides the 'ksvm' function.
+# install.packages("kernlab")
+library(kernlab, quietly=TRUE)
+
+# Build a Support Vector Machine model.
+set.seed(crv$seed)
+MYksvm <- ksvm(as.factor(STATUS) ~ .,
+               data=MYTrainingData,
+               kernel="rbfdot",
+               prob.model=TRUE)
+
+MYksvm
+
+################ Model Evaluation by confusion Matrix ################
+
+# Generate an Error Matrix for the SVM model.
+# Obtain the response from the SVM model.
+MYpr <- kernlab::predict(MYksvm, newdata=na.omit(MYTestingData))
+
+# Generate the confusion matrix showing counts.
+cm_SVM <- table(na.omit(MYTestingData)$STATUS, MYpr,
+                dnn=c("Actual", "Predicted"))
+cm_SVM
+
+cm_SVM$Accuracy <- mean (MYpr == MYTestingData$STATUS)
+cm_SVM$Accuracy
+
+# Generate the confusion matrix showing proportions.
+pcme <- function(actual, cl)
+{
+  x <- table(actual, cl)
+  nc <- nrow(x)
+  tbl <- cbind(x/length(actual),
+               Error=sapply(1:nc,
+                            function(r) round(sum(x[r,-r])/sum(x[r,]), 2)))
+  names(attr(tbl, "dimnames")) <- c("Actual", "Predicted")
+  return(tbl)
+}
+per <- pcme(na.omit(MYTestingData)$STATUS, MYpr)
+round(per, 2)
+
+# Calculate the overall error percentage.
+cat(100*round(1-sum(diag(per), na.rm=TRUE), 2))
+
+# Calculate the averaged class error percentage.
+#cat(100*round(mean(per[,"Error"], na.rm=TRUE), 2))
+
+
+
+#===============================================================================#
+
+############################# Logistic Regression model ##################################
+
+# Build a Logistic Regression model.
+MYglm <- glm(as.factor(STATUS) ~ .,
+             data=MYTrainingData,
+             family=binomial)
+
+MYglm
+
+################################ Model Evaluation By confusion Matrix ###################################
+
+# Generate an Error Matrix for the Logistic model.
+# Obtain the response from the Logistic model.
+MYpr <- as.vector(ifelse(predict(MYglm, type="response", newdata=MYTestingData) > 0.5, "TERMINATED", "ACTIVE"))
+
+# Generate the confusion matrix showing counts.
+cm_LR <- table(MYTestingData$STATUS, MYpr,
+               dnn=c("Actual", "Predicted"))
+cm_LR
+
+cm_LR$Accuracy <- mean (MYpr == MYTestingData$STATUS)
+cm_LR$Accuracy
+
+# Generate the confusion matrix showing proportions.
+pcme <- function(actual, cl)
+{
+  x <- table(actual, cl)
+  nc <- nrow(x)
+  tbl <- cbind(x/length(actual),
+               Error=sapply(1:nc,
+                            function(r) round(sum(x[r,-r])/sum(x[r,]), 2)))
+  names(attr(tbl, "dimnames")) <- c("Actual", "Predicted")
+  return(tbl)
+}
+per <- pcme(MYTestingData$STATUS, MYpr)
+round(per, 2)
+
+# Calculate the overall error percentage.
+cat(100*round(1-sum(diag(per), na.rm=TRUE), 2))
+
+# Calculate the averaged class error percentage.
+#cat(100*round(mean(per[,"Error"], na.rm=TRUE), 2))
+
+
+##########################################################################################
+model_compare <- data.frame(Model = c('D TREE',
+                                      'Random Forest',
+                                      'Ada BoosT',
+                                      'SVM',
+                                      'LR'),
+                            Accuracy = c(cm_DT$Accuracy[1],
+                                         cm_RF$Accuracy[1],
+                                         cm_Ada$Accuracy[1],
+                                         cm_SVM$Accuracy[1],
+                                         cm_LR$Accuracy[1]))
+
+ggplot(aes(x=Model, y=Accuracy), data=model_compare) +
+  geom_bar(stat='identity', fill = 'blue') +
+  ggtitle('Comparative Accuracy of Models') +
+  xlab('Models') +
+  ylab('Accuracy')
+
+
+.
+#=========================================================================================#
+# Conclusion : Summarizing the confusion matrix showed that decision trees, random forests, 
+# and Adaboost all did well predicted similarly. BUT Support Vector Machines and the Logistic 
+# Models did worse for this data.
+#==========================================================================================#
+
+
+
+#===========================================================================================#
+# Another way to evaluate the models is the AUC. The higher the AUC the better. 
+# The code below generates the information necessary to produce the graphs.
+#============================================================================================#
+
+########################## Evaluate model performance by ROC/AUC curve. ##########################
+
+# ROC Curve: requires the ROCR package.
+#install.packages('pROC')
+library(pROC)
+
+# ROC Curve: requires the ggplot2 package.
+library(ggplot2, quietly=TRUE)
+
+# Generate an ROC Curve for the Decision Tree model on MYdataset [test].
+MYpr <- predict(MYrpart, newdata=MYTestingData)[,2]
+
+# Remove observations with missing target.
+no.miss   <- na.omit(MYTestingData$STATUS)
+miss.list <- attr(no.miss, "na.action")
+attributes(no.miss) <- NULL
+
+if (length(miss.list))
+{
+  pred <- prediction(MYpr[-miss.list], no.miss)
+} else
+{
+  pred <- prediction(MYpr, no.miss)
+}
+
+pe <- performance(pred, "tpr", "fpr")
+au <- performance(pred, "auc")@y.values[[1]]
+pd <- data.frame(fpr=unlist(pe@x.values), tpr=unlist(pe@y.values))
+p <- ggplot(pd, aes(x=fpr, y=tpr))
+p <- p + geom_line(colour="red")
+p <- p + xlab("False Positive Rate") + ylab("True Positive Rate")
+p <- p + ggtitle("ROC Curve Decision Tree MYdataset [test] STATUS")
+p <- p + theme(plot.title=element_text(size=10))
+p <- p + geom_line(data=data.frame(), aes(x=c(0,1), y=c(0,1)), colour="grey")
+p <- p + annotate("text", x=0.50, y=0.00, hjust=0, vjust=0, size=5,
+                  label=paste("AUC =", round(au, 2)))
+print(p)
+
+# Calculate the area under the curve for the plot.
+# Remove observations with missing target.
+
+no.miss   <- na.omit(MYTestingData$STATUS)
+miss.list <- attr(no.miss, "na.action")
+attributes(no.miss) <- NULL
+
+if (length(miss.list))
+{
+  pred <- prediction(MYpr[-miss.list], no.miss)
+} else
+{
+  pred <- prediction(MYpr, no.miss)
+}
+performance(pred, "auc")
+
+#=============================================================================
+
+# Generate an ROC Curve for the rf model on MYdataset [test].
+MYpr <- predict(MYrf, newdata=na.omit(MYTestingData), type="prob")[,2]
+
+# Remove observations with missing target.
+no.miss   <- na.omit(na.omit(MYTestingData)$STATUS)
+miss.list <- attr(no.miss, "na.action")
+attributes(no.miss) <- NULL
+
+if (length(miss.list))
+{
+  pred <- prediction(MYpr[-miss.list], no.miss)
+} else
+{
+  pred <- prediction(MYpr, no.miss)
+}
+
+pe <- performance(pred, "tpr", "fpr")
+au <- performance(pred, "auc")@y.values[[1]]
+pd <- data.frame(fpr=unlist(pe@x.values), tpr=unlist(pe@y.values))
+p <- ggplot(pd, aes(x=fpr, y=tpr))
+p <- p + geom_line(colour="red")
+p <- p + xlab("False Positive Rate") + ylab("True Positive Rate")
+p <- p + ggtitle("ROC Curve Random Forest MYdataset [test] STATUS")
+p <- p + theme(plot.title=element_text(size=10))
+p <- p + geom_line(data=data.frame(), aes(x=c(0,1), y=c(0,1)), colour="grey")
+p <- p + annotate("text", x=0.50, y=0.00, hjust=0, vjust=0, size=5,
+                  label=paste("AUC =", round(au, 2)))
+print(p)
+
+# Calculate the area under the curve for the plot.
+# Remove observations with missing target.
+no.miss   <- na.omit(na.omit(MYTestingData)$STATUS)
+
+
+miss.list <- attr(no.miss, "na.action")
+attributes(no.miss) <- NULL
+
+if (length(miss.list))
+{
+  pred <- prediction(MYpr[-miss.list], no.miss)
+} else
+{
+  pred <- prediction(MYpr, no.miss)
+}
+performance(pred, "auc")
+
+
+#===================================================================================================#
+
+# Generate an ROC Curve for the ada Boost model on MYdataset [test].
+MYpr <- predict(MYada, newdata=MYTestingData, type="prob")[,2]
+
+# Remove observations with missing target.
+no.miss   <- na.omit(MYTestingData$STATUS)
+miss.list <- attr(no.miss, "na.action")
+attributes(no.miss) <- NULL
+
+if (length(miss.list))
+{
+  pred <- prediction(MYpr[-miss.list], no.miss)
+} else
+{
+  pred <- prediction(MYpr, no.miss)
+}
+
+pe <- performance(pred, "tpr", "fpr")
+au <- performance(pred, "auc")@y.values[[1]]
+pd <- data.frame(fpr=unlist(pe@x.values), tpr=unlist(pe@y.values))
+p <- ggplot(pd, aes(x=fpr, y=tpr))
+p <- p + geom_line(colour="red")
+p <- p + xlab("False Positive Rate") + ylab("True Positive Rate")
+p <- p + ggtitle("ROC Curve Ada Boost MYdataset [test] STATUS")
+p <- p + theme(plot.title=element_text(size=10))
+p <- p + geom_line(data=data.frame(), aes(x=c(0,1), y=c(0,1)), colour="grey")
+p <- p + annotate("text", x=0.50, y=0.00, hjust=0, vjust=0, size=5,
+                  label=paste("AUC =", round(au, 2)))
+print(p)
+
+# Calculate the area under the curve for the plot.
+# Remove observations with missing target.
+no.miss   <- na.omit(MYTestingData$STATUS)
+miss.list <- attr(no.miss, "na.action")
+attributes(no.miss) <- NULL
+
+if (length(miss.list))
+{
+  pred <- prediction(MYpr[-miss.list], no.miss)
+} else
+{
+  pred <- prediction(MYpr, no.miss)
+}
+performance(pred, "auc")
+
+#=============================================================================================================#
+
+# Generate an ROC Curve for the ksvm model on MYdataset [test].
+MYpr <- kernlab::predict(MYksvm, newdata=na.omit(MYTestingData), type="probabilities")[,2]
+
+# Remove observations with missing target.
+no.miss   <- na.omit(na.omit(MYTestingData)$STATUS)
+miss.list <- attr(no.miss, "na.action")
+attributes(no.miss) <- NULL
+
+if (length(miss.list))
+{
+  pred <- prediction(MYpr[-miss.list], no.miss)
+} else
+{
+  pred <- prediction(MYpr, no.miss)
+}
+
+pe <- performance(pred, "tpr", "fpr")
+au <- performance(pred, "auc")@y.values[[1]]
+pd <- data.frame(fpr=unlist(pe@x.values), tpr=unlist(pe@y.values))
+p <- ggplot(pd, aes(x=fpr, y=tpr))
+p <- p + geom_line(colour="red")
+p <- p + xlab("False Positive Rate") + ylab("True Positive Rate")
+p <- p + ggtitle("ROC Curve SVM MYdataset [test] STATUS")
+p <- p + theme(plot.title=element_text(size=10))
+p <- p + geom_line(data=data.frame(), aes(x=c(0,1), y=c(0,1)), colour="grey")
+p <- p + annotate("text", x=0.50, y=0.00, hjust=0, vjust=0, size=5,
+                  label=paste("AUC =", round(au, 2)))
+print(p)
+
+# Calculate the area under the curve for the plot.
+# Remove observations with missing target.
+no.miss   <- na.omit(na.omit(MYTestingData)$STATUS)
+miss.list <- attr(no.miss, "na.action")
+attributes(no.miss) <- NULL
+
+if (length(miss.list))
+{
+  pred <- prediction(MYpr[-miss.list], no.miss)
+} else
+{
+  pred <- prediction(MYpr, no.miss)
+}
+performance(pred, "auc")
+
+
+#==================================================================================#
+
+# Generate an ROC Curve for the glm model on MYdataset [test].
+MYpr <- predict(MYglm, type="response", newdata=MYTestingData)
+
+# Remove observations with missing target.
+no.miss   <- na.omit(MYTestingData$STATUS)
+miss.list <- attr(no.miss, "na.action")
+attributes(no.miss) <- NULL
+
+if (length(miss.list))
+{
+  pred <- prediction(MYpr[-miss.list], no.miss)
+} else
+{
+  pred <- prediction(MYpr, no.miss)
+}
+
+pe <- performance(pred, "tpr", "fpr")
+au <- performance(pred, "auc")@y.values[[1]]
+pd <- data.frame(fpr=unlist(pe@x.values), tpr=unlist(pe@y.values))
+p <- ggplot(pd, aes(x=fpr, y=tpr))
+p <- p + geom_line(colour="red")
+p <- p + xlab("False Positive Rate") + ylab("True Positive Rate")
+p <- p + ggtitle("ROC Curve Logistic Mydataset [test] STATUS")
+p <- p + theme(plot.title=element_text(size=10))
+p <- p + geom_line(data=data.frame(), aes(x=c(0,1), y=c(0,1)), colour="grey")
+p <- p + annotate("text", x=0.50, y=0.00, hjust=0, vjust=0, size=5,
+                  label=paste("AUC =", round(au, 2)))
+print(p)
+
+
+# Calculate the area under the curve for the plot.
+# Remove observations with missing target.
+no.miss   <- na.omit(MYTestingData$STATUS)
+miss.list <- attr(no.miss, "na.action")
+attributes(no.miss) <- NULL
+
+if (length(miss.list))
+{
+  pred <- prediction(MYpr[-miss.list], no.miss)
+} else
+{
+  pred <- prediction(MYpr, no.miss)
+}
+performance(pred, "auc")
+
+
+
+
+#======================================================================================#
+# It turns out that Ada boost produces the highest AUC As well as least confusion Matrix.
+# So we will use it to make predictions.
+
+# Deploy Model
+#=======================================================================================#
+###############################################################################################
+############################## Predicting Yearly Turnover #####################################
+
+# Building 2012, 2013, 2014, 2015 Model
+# Deriving 2012, 2013, 2014, 2015 dataset from MYdataset
+
+#################################################################################################
+
+
+#MYTrainingData_2012 <- subset(MYTrainingData, STATUS_YEAR ==2012)
+MYTestingData_2012 <- subset(MYTestingData, STATUS_YEAR==2012)
+View(MYTestingData_2012)
+
+#MYTrainingData_2013 <- subset(MYTrainingData, STATUS_YEAR ==2013)
+MYTestingData_2013 <- subset(MYTestingData, STATUS_YEAR==2013)
+
+#MYTrainingData_2014 <- subset(MYTrainingData, STATUS_YEAR ==2014)
+MYTestingData_2014 <- subset(MYTestingData, STATUS_YEAR==2014)
+
+#MYTrainingData_2015 <- subset(MYTrainingData, STATUS_YEAR ==2015)
+MYTestingData_2015 <- subset(MYTestingData, STATUS_YEAR==2015)
+
+# Modelling individual Years and making Predictions
+
+# 2012
+MYrf <- randomForest(as.factor(STATUS) ~ .,
+                     data=MYTrainingData,
+                     ntree=500,
+                     type = "class",
+                     mtry=2,
+                     importance=TRUE,
+                     #na.action=randomForest::na.roughfix,
+                     replace=FALSE)
+
+
+# Making Predictions
+MYTestingData_2012$MYpr <- predict(MYrf, newdata=MYTestingData_2012, type="class")
+view(MYTestingData_2012)
+
+
+MY_2012 <- table(MYTestingData_2012$STATUS, MYTestingData_2012$MYpr,
+                 dnn=c("Actual", "Predicted"))
+MY_2012
+
+# 2013
+MYrf <- randomForest(as.factor(STATUS) ~ .,
+                     data=MYTrainingData,
+                     ntree=500,
+                     type = "class",
+                     mtry=2,
+                     importance=TRUE,
+                     #na.action=randomForest::na.roughfix,
+                     replace=FALSE)
+
+
+# Making Predictions
+MYTestingData_2013$MYpr <- predict(MYrf, newdata=MYTestingData_2013, type="class")
+view(MYTestingData_2013)
+
+
+MY_2013 <- table(MYTestingData_2013$STATUS, MYTestingData_2013$MYpr,
+                 dnn=c("Actual", "Predicted"))
+MY_2013
+
+# 2014 Data
+MYrf <- randomForest(as.factor(STATUS) ~ .,
+                     data=MYTrainingData,
+                     ntree=500,
+                     type = "class",
+                     mtry=2,
+                     importance=TRUE,
+                     #na.action=randomForest::na.roughfix,
+                     replace=FALSE)
+
+
+# Making Predictions
+MYTestingData_2014$MYpr <- predict(MYrf, newdata=MYTestingData_2014, type="class")
+view(MYTestingData_2014)
+
+
+MY_2014 <- table(MYTestingData_2014$STATUS, MYTestingData_2014$MYpr,
+                 dnn=c("Actual", "Predicted"))
+MY_2014
+
+# 2015 Data
+MYrf <- randomForest(as.factor(STATUS) ~ .,
+                     data=MYTrainingData,
+                     ntree=500,
+                     type = "class",
+                     mtry=2,
+                     importance=TRUE,
+                     #na.action=randomForest::na.roughfix,
+                     replace=FALSE)
+
+
+# Making Predictions
+MYTestingData_2015$MYpr <- predict(MYrf, newdata=MYTestingData_2015, type="class")
+view(MYTestingData_2015)
+
+MY_2015 <- table(MYTestingData_2015$STATUS, MYTestingData_2015$MYpr,
+                 dnn=c("Actual", "Predicted"))
+MY_2015
+
+
+# Take 2014 Data and make predictions on 2015 data and compare with the original
+MYrf <- randomForest(as.factor(STATUS) ~ .,
+                     data=MYTrainingData_2014,
+                     ntree=500,
+                     type = "class",
+                     mtry=2,
+                     importance=TRUE,
+                     #na.action=randomForest::na.roughfix,
+                     replace=FALSE)
+
+MYTestingData_2015$MYpr <- predict(MYrf, newdata=MYTestingData_2015, type="class")
+view(MYTestingData_2015)
+
+MY_2014_on_2015 <-table(MYTestingData_2015$STATUS, MYTestingData_2015$MYpr,
+                        dnn=c("Actual", "Predicted"))
+
+# Comparing 2014 Predictions and 2015
+MY_2013
+MY_2014
+MY_2015
+MY_2014_on_2015
+
+# Line chart
+res <- data.frame(MYTestingData_2015$STATUS, MYTestingData_2015$MYpr)
+res <- cbind(res, x = rep(MYTestingData_2015$MYpr, 2))
+head(res)
+
+ggplot(res,
+       aes(x = MYTestingData_2015$STATUS,
+           y = MYTestingData_2015$MYpr)) +
+  geom_line()
+
+
+# Feature Importance
+rn <- round(randomForest::importance(MYrf), 2)
+rn[order(rn[,3], decreasing=TRUE),]
+
+MYTrainingData$age <- 114.98
+MYTrainingData$length_of_service <- 108.33
+MYTrainingData$gender_full <- 93.40
+MYTrainingData$BUSINESS_UNIT <- 35.21
+MYTrainingData$BUSINESS_UNIT <- 10.99
+
+model_compare <- data.frame(Model = c('Age',
+                                      'STATUS_YEAR',
+                                      'gender_full',
+                                      'Length of Service',
+                                      'Business Unit'),
+                            Accuracy = c(MYTrainingData$age[1],
+                                         MYTrainingData$length_of_service[1],
+                                         MYTrainingData$gender_full[1],
+                                         MYTrainingData$BUSINESS_UNIT[1],
+                                         MYTrainingData$BUSINESS_UNIT[1]))
+
+ggplot(aes(x=Model, y=Accuracy), data=model_compare) +
+  geom_bar(stat='identity', fill = 'blue') +
+  ggtitle('Important factors affecting Employee Turnover') +
+  xlab('Factors') +
+  ylab('mean')
